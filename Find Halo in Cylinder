@@ -1,0 +1,170 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import illustris_python as il
+import groupcat as gc
+import snapshot as snap
+from mpl_toolkits.mplot3d import Axes3D
+
+class FindHaloInCylinder(object):
+    def __init__(self, sim_name, partType):
+        self.sim_name = sim_name 
+        self.partType = partType
+        self.basePath = 'sims.TNG/TNG{}/output'.format(self.sim_name)       # Starts sim
+        self.fields = ['SubhaloMass', 'SubhaloGrNr', 'SubhaloPos'] # Mass, Group Number, Position
+        self.header = gc.loadHeader(self.basePath, 99)                      # Loads header
+        self.subhalos= il.groupcat.loadSubhalos(self.basePath, 99, fields=self.fields) # Loads Subhalos into Sim
+        self.SubHaloMass = self.subhalos['SubhaloMass'] * 1e10 
+        self.pos = self.subhalos['SubhaloPos']     # Gets the coords of the most massive subhalos
+        self.x_m = self.pos[0,0] * 1.0e-3                       # Kpcs to Mpcs
+        self.y_m = self.pos[0,1] * 1.0e-3
+        self.z_m = self.pos[0,2] * 1.0e-3
+        self.r_1 = 5
+        self.box_size = self.header['BoxSize'] * 1.0e-3
+        self.x_allhalo = self.pos[:,0] * 1e-3
+        self.y_allhalo = self.pos[:,1] * 1e-3
+        self.z_allhalo = self.pos[:,2] * 1e-3
+        self.group_number = self.subhalos['SubhaloGrNr']
+        self.x_pbc = []
+        self.y_pbc = []
+        self.z_pbc = []
+        self.group_number_pbc = []
+        
+    # This function dupiltes the simulation 8 times and makes it larger
+    def periodic_boundary_condition(self):
+        fig = plt.figure(0,figsize=(10,10))
+        ax = fig.add_subplot(111, aspect = 'equal' )
+
+        # This nested for loop tells each duplicated box where they are to be placed
+        for dx in [-(self.box_size),0,(self.box_size)]:
+            for dy in [-(self.box_size),0,(self.box_size)]:
+                x = self.x_allhalo + dx
+                self.x_pbc.extend(x)
+                y = self.y_allhalo + dy
+                self.y_pbc.extend(y)
+                self.z_pbc.extend(self.z_allhalo)
+                ax.scatter(x,y, s = 0.01, alpha=0.5)
+                self.group_number_pbc.extend(self.group_number)
+        plt.show()
+
+        fig = plt.figure(0,figsize=(10,10))
+        ax = fig.add_subplot(111, aspect = 'equal' )
+        ax.scatter(self.x_pbc,self.y_pbc, s = .01, alpha = 0.5, c = 'rebeccapurple')
+        plt.show()
+        
+    # This function creates a cylinder around a selected halo
+    def cylinder(self):
+        self.x_pbc = np.array(self.x_pbc)
+        self.y_pbc = np.array(self.y_pbc)
+        self.z_pbc = np.array(self.z_pbc)
+        self.group_number_pbc = np.array(self.group_number_pbc)
+
+        r = np.sqrt((self.x_pbc - self.x_m)**2 + (self.y_pbc - self.y_m)**2)
+        print(r)
+        selection = (r < 0.5)
+        self.gn = np.unique(self.group_number_pbc[selection])
+        #print('group_number_pbc:', gn , 'len:', len(gn))
+        fig = plt.figure(0,figsize=(10,10))
+        ax = fig.add_subplot(111, aspect = 'equal' )
+        ax.scatter(self.x_pbc[selection],self.y_pbc[selection], s = 2, alpha = 1, c = 'rebeccapurple')
+        plt.show()
+        
+        fig = plt.figure(0,figsize=(10,10))
+        ax = fig.add_subplot(111)
+        ax.scatter(self.y_pbc[selection],self.z_pbc[selection], s = 2, alpha = 1, c = 'rebeccapurple')
+        plt.show()
+        
+        fig = plt.figure(figsize = (10,10))
+        ax = fig.add_subplot(111, projection='3d', aspect = 'equal')
+        
+        ax.scatter(self.x_pbc[selection], self.y_pbc[selection], self.z_pbc[selection], c='purple', marker='o')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+
+        plt.show()
+    def get_particles(self):
+        
+        x_gas = []
+        y_gas = []
+        z_gas = []
+        
+        x_dm = []
+        y_dm = []
+        z_dm = []
+        
+        x_stars = []
+        y_stars = []
+        z_stars = []
+        
+        stars_mass = []
+
+        for i in self.gn: 
+            gas = snap.loadHalo(self.basePath, 99, id=i, partType=0, fields = 'Coordinates') # partType 0 is gas
+            #print(np.shape(particles))
+            if len(gas) > 0 :
+                x=gas[:,0] * 1.0e-3 
+                x_gas.extend(x)
+                y=gas[:,1] * 1.0e-3
+                y_gas.extend(y)
+                z=gas[:,2] * 1.0e-3 
+                z_gas.extend(z)
+
+            dm = snap.loadHalo(self.basePath, 99, id=i, partType=1, fields = 'Coordinates') # partType 1 is dm
+            #print(np.shape(particles))
+            x=dm[:,0] * 1.0e-3 
+            x_dm.extend(x)
+            y=dm[:,1] * 1.0e-3
+            y_dm.extend(y)
+            z=dm[:,2] * 1.0e-3 
+            z_dm.extend(z)
+            
+            stars = snap.loadHalo(self.basePath, 99, id=i, partType=4, fields = ['Coordinates','Masses']) # partType 4 is stars
+            print(stars)
+
+            #print(np.shape(particles))
+            if stars['count'] > 1 :
+                x=stars['Coordinates'][:,0] * 1.0e-3 
+                x_stars.extend(x)
+                y=stars['Coordinates'][:,1] * 1.0e-3
+                y_stars.extend(y)
+                z=stars['Coordinates'][:,2] * 1.0e-3 
+                z_stars.extend(z)
+
+#             star = stars['Masses'] * 1e+10
+#             stars_mass.extend(star)
+
+        np.savetxt("boundary+cylinder/dark_matter_cylinder_selection.dat", np.transpose([x_dm,y_dm,z_dm]), header = "x_dm, y_dm, z_dm")
+        np.savetxt("boundary+cylinder/gas_cylinder_selection.dat", np.transpose([x_gas,y_gas,z_gas]), header = "x_gas, y_gas, z_gas")
+        np.savetxt("boundary+cylinder/stars_cylinder_selection.dat", np.transpose([x_stars,y_stars,z_stars]), header = "x_stars, y_stars, z_stars")
+        np.savetxt("boundary+cylinder/stars_mass.dat", np.transpose([stars_mass]), header = "stars_mass")
+        
+            #TODO : get massses of star as well and put them in a list
+            #TODO : save halos as well
+            
+        
+    def plot(self):
+        
+        x_gas, y_gas, z_gas =  np.loadtxt("boundary+cylinder/gas_cylinder_selection.dat", unpack=True)
+        x_dm, y_dm, z_dm =  np.loadtxt("boundary+cylinder/dark_matter_cylinder_selection.dat", unpack=True)
+        x_stars, y_stars, z_stars =  np.loadtxt("boundary+cylinder/stars_cylinder_selection.dat", unpack=True)
+        
+        
+        fig = plt.figure(figsize = (15,15))
+        ax = fig.add_subplot(111)
+        ax.scatter(x_gas,y_gas, c='purple', marker='.', s = 0.1, alpha = 0.1)
+        ax.scatter(x_dm,y_dm, c='grey', marker='.', s = 0.1, alpha = 0.5)
+        ax.scatter(x_stars,y_stars, c='green', marker='.', s = 0.1, alpha = 0.1)
+        plt.show()
+        
+        fig = plt.figure(figsize = (15,15))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(x_gas,y_gas,z_gas, c='purple', marker='.', s = 0.1, alpha = 0.1)
+        ax.scatter(x_dm,y_dm,z_dm, c='grey', marker='.', s = 0.1, alpha = 0.5)
+        ax.scatter(x_stars,y_stars,z_stars, c='green', marker='.', s = 0.1, alpha = 0.1)
+        plt.show()
+        
+sim_name = FindHaloInCylinder('100-3',1) 
+sim_name.periodic_boundary_condition()
+sim_name.cylinder()
+sim_name.get_particles()
+#sim_name.plot()
