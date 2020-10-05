@@ -1,0 +1,59 @@
+import illustris_python as il
+import numpy as np
+import matplotlib.pyplot as plt
+
+def running_histogram(X, binSize):
+    """ Create a adaptive histogram of a (x) point set using some given binsize. """
+    minVal = np.nanmin( X[X != 0.0] )    # Return Lowest value as long as x is not zero
+    maxVal = np.nanmax(X)                # Returns max value of the array
+    
+    nBins = int( (np.nanmax(X)-minVal) / binSize )      # (Max Value - Min Value)/binSize = number of bins [as an int]
+    bins = np.arange(minVal, maxVal+binSize, binSize)   # Creating the edge of the bins along the x-axis
+
+    running_h   = []
+    bin_centers = []
+
+    for i, binMin in enumerate(bins):                   # For loop that lists out the x-axis points
+        binMax = binMin + binSize                       # Sets binMax number 
+        with np.errstate(invalid='ignore'):             # Ignore the invalid 
+            w = np.where((X >= binMin) & (X < binMax))  # Choose w in the range X>=binMin and X < binMax
+            
+        if len(w[0]) > 0:
+            running_h.append( len(w[0]) )
+            bin_centers.append( np.nanmedian(X[w]))
+
+    return np.array(bin_centers), np.array(running_h)
+    
+def calc_mass_function(sim_name):
+    
+    binSize = 0.1
+    basePath = 'sims.TNG/TNG{}/output'.format(sim_name)  # Chooses Simulation Bases on its Name
+    fig = plt.figure(0,figsize=(10,8))                   # Plots multiple groups of data on one figure
+    ax = fig.add_subplot(111)                            # Nrows, Ncols, and Index
+    ax.set_yscale('log')                                 # Sets y scale to log (10^x)
+    ax.set_xlabel('Total Mass [$M_\odot$] [log10]', fontsize=12)      # Sets label
+    ax.set_ylabel('Number of Subhalos/Megaparsec^3 dex^-1', fontsize=12)     # Sets label
+    
+    if "300" in sim_name:                                # Sets normalizing factor to 302.6 if it's a TNG300 sim
+        norm_factor = 302.6**3 * binSize
+        
+    if "100" in sim_name:                                # Sets normalizing factor to 110.3 if it's a TNG100 sim
+        norm_factor = 110.7**3 * binSize
+         
+    fields = ['SubhaloMass']                                          # Sets fields to just Subhalo Masses
+    subhalos = il.groupcat.loadSubhalos(basePath, 99, fields=fields)  # Loads the subhalo masses from illustris
+    mass_msun = subhalos * 1e10 / 0.6774                              # Changes subhalo masses in terms of masses of the sun
+    w = np.where(mass_msun > 0)                                       # Chooses all nonzero masses
+    mass_msunlog10 = np.log10(mass_msun[w])                           # log10 of each nonzero subhalo mass in the array 
+    xm, ym = running_histogram(mass_msunlog10 , binSize=binSize)      # Set mass_msunlog10 to X-axis
+    header = il.groupcat.loadHeader(basePath, 99)                     # Load the group catalog header, basePath and snapnum
+    ym = ym / norm_factor                                             # divides the ym with the normalizing factor 
+    if "Dark" in sim_name:
+            ax.plot(xm,ym, '--', label = sim_name)     
+    else:
+            ax.plot(xm,ym, '-', label = sim_name)  
+    ax.legend()                                                       # Shows the legend
+    
+#input two simulation types
+for sim_name in ["100-1", "100-1-Dark"]:
+calc_mass_function(sim_name)
