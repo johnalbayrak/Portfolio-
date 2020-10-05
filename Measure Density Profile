@@ -1,0 +1,138 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import illustris_python as il
+import groupcat as gc
+import snapshot as snap 
+
+class MeasureDensityProfile(object):
+    def __init__(self, sim_name, partType):
+        self.sim_name = sim_name 
+        self.partType = partType
+        self.rmin = 0.01
+        self.rmax = 1
+        self.n_rp = 10+1
+        self.basePath = 'sims.TNG/TNG{}/output'.format(self.sim_name)       # Starts sim
+        self.fields = ['SubhaloMass', 'SubhaloGrNr', 'SubhaloPos'] # Mass, Group Number, Position
+        self.header = gc.loadHeader(self.basePath, 99)                      # Loads header
+        self.subhalos= il.groupcat.loadSubhalos(self.basePath, 99, fields=self.fields) # Loads Subhalos into Sim
+        self.SubHaloMass = self.subhalos['SubhaloMass'] * 1e10 
+        
+        self.select_14  = (self.SubHaloMass >= 10**14) # selects Subhalos woth mass >= 1e14
+        print('select 14:',len(self.SubHaloMass[self.select_14]))
+        
+        header = il.groupcat.loadHeader(self.basePath, 99)
+        #norm_factor = (header['BoxSize']/1000)**3 * binSize
+        print('boxsize',header['BoxSize'])
+        print('header all' ,header )
+
+        
+    def select_subhalo1(self, halo_id):
+       # select = (self.SubHaloMass==max(self.SubHaloMass))# Selects most massive subhalo in array of subhalos
+ 
+        pos = self.subhalos['SubhaloPos'][self.select_14]                                   # Gets the coords of the most massive subhalo
+        self.xh = pos[halo_id,0] * 1.0e-3                                # Kpcs to Mpcs
+        self.yh = pos[halo_id,1] * 1.0e-3
+        self.zh = pos[halo_id,2] * 1.0e-3
+        self.id = self.subhalos['SubhaloGrNr'][self.select_14][halo_id]# Selects group number of most massive subhalo
+        # np.atleast_1d makes scalar into array
+        print('%e'%self.SubHaloMass[halo_id], self.id)
+        
+        #Make different function for stars seperatly sue to stars having different masses. Use if statements to differentialte the masses for each sim
+        
+    def select_particle_type(self):
+ 
+        xh = self.xh
+        yh = self.yh
+        zh = self.zh
+        data = snap.loadHalo(self.basePath, 99, id=self.id, partType=self.partType, fields = 'Coordinates') # partType 4 is stars
+        
+        self.x=data[:,0] * 1.0e-3   # Kpcs to Mpcs
+        self.y=data[:,1] * 1.0e-3
+        self.z=data[:,2] * 1.0e-3
+
+        self.r = np.sqrt((self.x-xh)**2 + (self.y-yh)**2 + (self.z-zh)**2) # Sets range for field of view at the subhalo
+        
+    def graph_scatter_plot(self):
+        plt.figure(figsize=(21,7))
+        plt.subplot(131)
+        plt.xlabel('x axis', fontsize=15)
+        plt.ylabel('y axis', fontsize=15)
+        plt.title('', fontsize=15)
+        plt.scatter(self.x[self.r<4],self.y[self.r<4], c = 'rebeccapurple', s = 0.1, alpha = 0.05) # alpha = transparency, s = size
+        plt.scatter(self.xh, self.yh, s=1000, marker = 'x')
+        plt.subplot(132)
+        plt.xlabel('y axis', fontsize=15)
+        plt.ylabel('z axis', fontsize=15)
+        plt.title('TNG{}'.format(self.sim_name), fontsize=15)
+        plt.scatter(self.y[self.r<4],self.z[self.r<4], c = 'rebeccapurple', s = 0.1, alpha = 0.05)
+        plt.scatter(self.yh, self.zh, s=1000, marker = 'x')
+        plt.subplot(133)
+        plt.xlabel('z axis', fontsize=15)
+        plt.ylabel('x axis', fontsize=15)
+        plt.title('', fontsize=15)
+        plt.scatter(self.z[self.r<4],self.x[self.r<4], c = 'rebeccapurple', s = 0.1, alpha = 0.05)
+        plt.scatter(self.zh, self.xh, s=1000, marker = 'x')
+        
+    def plotFOF(self):
+         plt.scatter(self.x,self.y, c = 'rebeccapurple', s = 0.1, alpha = 0.05)
+            
+    def graph_density_profile(self):
+        
+        plt.figure(figsize=(21,7))
+        plt.subplot(131)
+        plt.xlabel('x axis', fontsize=15)
+        plt.ylabel('y axis', fontsize=15)
+        plt.title('', fontsize=15)
+        plt.scatter(self.x[(self.r>0.3) & (self.r<0.4)],self.y[(self.r<0.4) & (self.r>0.3)], c = 'rebeccapurple', s = 0.1, alpha = 0.3) # alpha = transparency, s = size
+        plt.subplot(132)
+        plt.xlabel('y axis', fontsize=15)
+        plt.ylabel('z axis', fontsize=15)
+        plt.title('TNG{}'.format(sim_name), fontsize=15)
+        plt.scatter(self.y[(self.r>0.3) & (self.r<0.4)],self.z[(self.r>0.3) & (self.r<0.4)], c = 'rebeccapurple', s = 0.1, alpha = 0.3)
+        plt.subplot(133)
+        plt.xlabel('z axis', fontsize=15)
+        plt.ylabel('x axis', fontsize=15)
+        plt.title('', fontsize=15)
+        plt.scatter(self.z[(self.r>0.3) & (self.r<0.4)],self.x[(self.r>0.3) & (self.r<0.4)], c = 'rebeccapurple', s = 0.1, alpha = 0.3)
+
+        density_ar = np.array([])
+        
+        bin1 = 10**(np.arange(np.log10(0.001),np.log10(3 + 0.1), 0.1))
+                    
+        for i in bin1:
+            npart = len(self.r[(self.r>i) & (self.r<(i+0.1))])
+            density = np.log10((npart * 1.1e7) / ((4/3)*np.pi*((i+0.1)**3 - i**3))) #Change MASS for each sim
+            density_ar = np.append(density_ar, density)
+        
+        fig = plt.figure(0,figsize=(15,8))
+        ax = fig.add_subplot(111)
+        
+        ax.set_xlabel('Distance from Center of Subhalo in Megaparsec [log10]')
+        ax.set_ylabel('Density of {} (Number of Particles)/(Volume in Megaparsec)^3 [log10]'.format(self.sim_name))
+        ax.set_xscale('log')       
+        plt.title('Density Profile for TNG{} Partilcle Type: {}'.format(self.sim_name,self.partType), fontsize=15)
+        ax.plot(density_ar, '-', label = "Halo ID:{}".format(str(halo_id)))
+        ax.legend()
+        
+       # print('HALO ID IS ', halo_id)
+        np.savetxt("{}_multiples_halos/id={}_part={}.dat".format(self.sim_name,halo_id,self.partType), np.transpose([bin1,density_ar]), header = "r[Mpc/h], log10rho")
+            
+        
+sim_name = MeasureDensityProfile('100-3',1) 
+# The last number puts in the partType
+"""
+partType 0 = Gas
+         1 = DM
+         4 = Stars
+         
+"""
+#Only printing the first three Halos for now
+for halo_id in np.arange(0,3,1):
+    sim_name.select_subhalo1(halo_id = halo_id)
+    sim_name.select_particle_type()
+    sim_name.mass_sim_partType()
+    sim_name.graph_scatter_plot()
+    sim_name.graph_density_profile()
+     plt.figure()
+     sim_name.plotFOF()
+    
