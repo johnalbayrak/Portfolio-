@@ -1,0 +1,156 @@
+import numpy as np
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import illustris_python as il
+import groupcat as gc
+import snapshot as snap
+from mpl_toolkits.mplot3d import Axes3D
+import timeit
+
+dm_pos = il.snapshot.loadSubset('sims.TNG/TNG100-3/output', 99, 'dm', fields=['Coordinates']) # CHANGE BASEPATH and PARTTYPE
+
+class DensityProfile(object):
+    def __init__(self, sim_name, partType, halo_id):
+        self.sim_name = sim_name 
+        self.partType = partType
+        self.basePath = 'sims.TNG/TNG{}/output'.format(self.sim_name)       # Starts sim
+        self.fields = ['SubhaloMass','SubhaloPos'] # Mass, Group Number, Position
+        self.header = gc.loadHeader(self.basePath, 99)                      # Loads header
+        self.subhalos= il.groupcat.loadSubhalos(self.basePath, 99, fields=self.fields) # Loads Subhalos into Sim
+        self.SubHaloMass = self.subhalos['SubhaloMass'] * 1e10 
+        self.pos = self.subhalos['SubhaloPos']     # Gets the coords of the most massive subhalos
+        self.halo_id = halo_id                           # This is for the mostmassive subhalo in the sim 
+        self.x_m = self.pos[self.halo_id,0] * 1.0e-3                       # Kpcs to Mpcs
+        self.y_m = self.pos[self.halo_id,1] * 1.0e-3
+        self.z_m = self.pos[self.halo_id,2] * 1.0e-3
+        self.box_size = self.header['BoxSize'] * 1.0e-3
+        
+    def get_particles(self):
+        start = timeit.default_timer()
+        # do something
+        #dm_pos = il.snapshot.loadSubset(self.basePath, 99, 'dm', fields=['Coordinates']) 
+#         stop = timeit.default_timer()
+#         print('Selection Took:', stop - start, 'seconds')
+        self.x_dm = dm_pos[:,0] * 1.0e-3 
+        self.y_dm = dm_pos[:,1] * 1.0e-3 
+        self.z_dm = dm_pos[:,2] * 1.0e-3 
+        
+        self.x_selection = (abs(self.x_dm-self.x_m)<5) | (abs(self.x_dm-self.box_size-self.x_m)<5) | (abs(self.x_dm+self.box_size-self.x_m)<5)
+        self.y_selection = (abs(self.y_dm-self.y_m)<5) | (abs(self.y_dm-self.box_size-self.y_m)<5) | (abs(self.y_dm+self.box_size-self.y_m)<5)
+        
+        self.x_pbc = self.x_dm[self.x_selection&self.y_selection]
+        self.y_pbc = self.y_dm[self.x_selection&self.y_selection]
+        self.z_pbc = self.z_dm[self.x_selection&self.y_selection]
+        #Left Side
+        if self.x_m < 10:
+            self.x_pbc2 = self.x_pbc[self.x_pbc > 0.5 * self.box_size] - self.box_size
+            self.y_pbc2 = self.y_pbc[self.x_pbc > 0.5 * self.box_size]
+            self.x_pbc3 = self.x_pbc[self.x_pbc < 0.5 * self.box_size] 
+            self.y_pbc3 = self.y_pbc[self.x_pbc < 0.5 * self.box_size]
+        #Right Side
+        if self.x_m > self.box_size-10:
+            self.x_pbc2 = self.x_pbc[self.x_pbc < 0.5 * self.box_size] + self.box_size
+            self.y_pbc2 = self.y_pbc[self.x_pbc < 0.5 * self.box_size]
+            self.x_pbc3 = self.x_pbc[self.x_pbc > 0.5 * self.box_size] 
+            self.y_pbc3 = self.y_pbc[self.x_pbc > 0.5 * self.box_size]
+        #Bottom
+        if self.y_m < 10 :
+            self.x_pbc2 = self.x_pbc[self.y_pbc > 0.5 * self.box_size]  
+            self.y_pbc2 = self.y_pbc[self.y_pbc > 0.5 * self.box_size] - self.box_size
+            self.x_pbc3 = self.x_pbc[self.y_pbc < 0.5 * self.box_size] 
+            self.y_pbc3 = self.y_pbc[self.y_pbc < 0.5 * self.box_size]
+        #Top
+        if self.y_m > self.box_size - 10 :
+            self.x_pbc2 = self.x_pbc[self.y_pbc < 0.5 * self.box_size]  
+            self.y_pbc2 = self.y_pbc[self.y_pbc < 0.5 * self.box_size] + self.box_size
+            self.x_pbc3 = self.x_pbc[self.y_pbc > 0.5 * self.box_size] 
+            self.y_pbc3 = self.y_pbc[self.y_pbc > 0.5 * self.box_size]
+        
+        
+        self.r2 = np.sqrt((self.x_pbc2-self.x_m)**2 + (self.y_pbc2-self.y_m)**2) # Sets range for field of view at the subhalo
+        self.r3 = np.sqrt((self.x_pbc3-self.x_m)**2 + (self.y_pbc3-self.y_m)**2)
+        
+        self.r_tot = np.append(self.r2,self.r3)
+        
+        print('r2 and r3',np.shape(self.r2),np.shape(self.r3))
+        print('r_tot',np.shape(self.r_tot))
+        
+        print(len(self.x_pbc))
+        
+        stop = timeit.default_timer()
+        print('Selection Took:', stop - start, 'seconds')
+    
+    def measure_density(self):
+        """Super ineffeicient and bulky way to set mass of particle 
+           based on simulation and partType for density measurement but it works. """
+        
+        if ('100-1' == self.sim_name) & (self.partType == 0):
+            MASS = 1.4e6
+        elif ('100-1' == self.sim_name) & (self.partType == 1):
+            MASS = 7.5e6
+        elif ('100-1-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 8.9e6  
+        elif ('100-2' == self.sim_name) & (self.partType == 0):
+            MASS = 1.1e7
+        elif ('100-2' == self.sim_name) & (self.partType == 1):
+            MASS = 6e7
+        elif ('100-2-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 7.1e7
+        elif ('100-3' == self.sim_name) & (self.partType == 0):
+            MASS = 8.9e9
+        elif ('100-3' == self.sim_name) & (self.partType == 1):
+            MASS = 4.8e8
+        elif ('100-3-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 5.7e8
+        elif ('300-1' == self.sim_name) & (self.partType == 0):
+            MASS = 1.1e7
+        elif ('300-1' == self.sim_name) & (self.partType == 1):
+            MASS = 5.9e7
+        elif ('300-1-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 7e7
+        elif ('300-2' == self.sim_name) & (self.partType == 0):
+            MASS = 8.8e7
+        elif ('300-2' == self.sim_name) & (self.partType == 1):
+            MASS = 4.7e8
+        elif ('300-2-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 5.6e8
+        elif ('300-3' == self.sim_name) & (self.partType == 0):
+            MASS = 3.8e8
+        elif ('300-3' == self.sim_name) & (self.partType == 1):
+            MASS = 7e8
+        elif ('300-3-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 4.5e9
+           
+        self.density_ar = np.array([])     #Creates array that hold desnity values at single point
+        
+        self.bin1 = 10**(np.arange(np.log10(0.01),np.log10(3 + 0.1), 0.1))   #Creates bins that represents distance from center of subhalo
+                    
+        for i in self.bin1:
+            npart = len(self.r_tot[(self.r_tot>i) & (self.r_tot<(i+0.1))])      # finds length of the number of particles in 
+            density = np.log10((npart * MASS) / (np.pi*((i+0.1)**2 - i**2)))  # calculates the density at bin value
+            self.density_ar = np.append(self.density_ar, density)                     # appends values of density of bin into array to graph
+   
+    def density_profile_graph(self):
+        
+        # Graphs the density profile 
+        fig = plt.figure(0,figsize=(15,8))
+        ax = fig.add_subplot(111)
+        
+        ax.set_xlabel('Distance from Center of Subhalo in Megaparsec [log10]')
+        ax.set_ylabel('Density of {} (Number of Particles)/(Volume in Megaparsec)^3 [log10]'.format(self.sim_name))
+        ax.set_xscale('log')       
+        plt.title('Density Profile for TNG{} Partilcle Type: {}'.format(self.sim_name,self.partType), fontsize=15)
+        ax.plot(self.bin1,self.density_ar, '-',label = "Halo ID:0")
+        ax.legend()
+        
+    def plot(self):
+        #Scatterplot of selected Halo 
+        fig = plt.figure(figsize = (10,10))
+        ax = fig.add_subplot(111)
+        #ax.set_xlim(0,9.5)
+        ax.set_xlabel("x-axis")
+        ax.set_ylabel("y-axis")
+        plt.title('Scatterplot of Selected Halo Id:')
+        ax.scatter(self.x_pbc2,self.y_pbc2, c='purple', marker='.', s = 0.5, alpha = 0.1)
+        ax.scatter(self.x_pbc3,self.y_pbc3, c='purple', marker='.', s = 0.5, alpha = 0.1)
+        plt.show()
