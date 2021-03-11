@@ -1,0 +1,240 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import illustris_python as il
+import groupcat as gc
+import snapshot as snap 
+
+class MeasureDensityProfile(object):
+    def __init__(self, sim_name, partType):
+        self.sim_name = sim_name 
+        self.partType = partType
+        self.rmin = 0.01
+        self.rmax = 1
+        self.n_rp = 10+1
+        self.basePath = 'sims.TNG/TNG{}/output'.format(self.sim_name)       # Starts sim
+        self.fields = ['SubhaloMass', 'SubhaloGrNr', 'SubhaloPos'] # Mass, Group Number, Position
+        self.header = gc.loadHeader(self.basePath, 99)                      # Loads header
+        self.subhalos= il.groupcat.loadSubhalos(self.basePath, 99, fields=self.fields) # Loads Subhalos into Sim
+        self.SubHaloMass = self.subhalos['SubhaloMass'] * 1e10 
+        
+        # Below selects the range Subhalos we use by mass
+        self.select_14  = (self.SubHaloMass >= 10**14)
+        # select = (self.SubHaloMass==max(self.SubHaloMass))# Selects most massive subhalo in array of subhalos
+ 
+        print('len select_14:',len(self.SubHaloMass[self.select_14]))
+        
+        header = il.groupcat.loadHeader(self.basePath, 99)
+        #norm_factor = (header['BoxSize']/1000)**3 * binSize
+        print('boxsize',header['BoxSize'])
+        print('header all' ,header )
+
+        
+    def select_subhalo1(self, halo_id):
+        
+       
+        pos = self.subhalos['SubhaloPos'][self.select_14]       # Gets the coords of the most massive subhalos
+        self.xh = pos[halo_id,0] * 1.0e-3                       # Kpcs to Mpcs
+        self.yh = pos[halo_id,1] * 1.0e-3
+        self.zh = pos[halo_id,2] * 1.0e-3
+        self.id = self.subhalos['SubhaloGrNr'][self.select_14][halo_id] #Selects group number of most massive subhalo
+        # np.atleast_1d makes scalar into array
+        print('%e'%self.SubHaloMass[halo_id], self.id)
+        
+    def select_particle_type(self):
+        
+        # Tells the simulation which data particle type to select
+ 
+        xh = self.xh
+        yh = self.yh
+        zh = self.zh
+        data = snap.loadHalo(self.basePath, 99, id=self.id, partType=self.partType, fields = 'Coordinates') # partType 4 is stars
+        
+        self.x=data[:,0] * 1.0e-3   # Kpcs to Mpcs
+        self.y=data[:,1] * 1.0e-3
+        self.z=data[:,2] * 1.0e-3
+
+        self.r = np.sqrt((self.x-xh)**2 + (self.y-yh)**2 + (self.z-zh)**2) # Sets range for field of view at the subhalo
+        
+    def graph_scatter_plot(self):
+        
+        # This shows the shape of the selected Subhalo and marks the center with an X
+        
+        plt.figure(figsize=(21,7))
+        plt.subplot(131)
+        plt.xlabel('x axis', fontsize=15)
+        plt.ylabel('y axis', fontsize=15)
+        plt.title('', fontsize=15)
+        plt.scatter(self.x[self.r<4],self.y[self.r<4], c = 'rebeccapurple', s = 0.1, alpha = 0.05) # alpha = transparency, s = size
+        plt.scatter(self.xh, self.yh, s=1000, marker = 'x')
+        plt.subplot(132)
+        plt.xlabel('y axis', fontsize=15)
+        plt.ylabel('z axis', fontsize=15)
+        plt.title('TNG{}'.format(self.sim_name), fontsize=15)
+        plt.scatter(self.y[self.r<4],self.z[self.r<4], c = 'rebeccapurple', s = 0.1, alpha = 0.05)
+        plt.scatter(self.yh, self.zh, s=1000, marker = 'x')
+        plt.subplot(133)
+        plt.xlabel('z axis', fontsize=15)
+        plt.ylabel('x axis', fontsize=15)
+        plt.title('', fontsize=15)
+        plt.scatter(self.z[self.r<4],self.x[self.r<4], c = 'rebeccapurple', s = 0.1, alpha = 0.05)
+        plt.scatter(self.zh, self.xh, s=1000, marker = 'x')
+        
+    def plotFOF(self):
+         plt.scatter(self.x,self.y, c = 'rebeccapurple', s = 0.1, alpha = 0.05)
+            
+    def density_profile_calc(self):
+        
+        # These if statements make sure each partType and sim gets assigned the correct MASS value
+        # The function calculates a density profile for Gas and Dark Matter
+    
+        if ('100-1' == self.sim_name) & (self.partType == 0):
+            MASS = 1.4e6
+        elif ('100-1' == self.sim_name) & (self.partType == 1):
+            MASS = 7.5e6
+        elif ('100-1-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 8.9e6
+        elif ('100-2' == self.sim_name) & (self.partType == 0):
+            MASS = 1.1e7
+        elif ('100-2' == self.sim_name) & (self.partType == 1):
+            MASS = 6e7
+        elif ('100-2-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 7.1e7
+        elif ('100-3' == self.sim_name) & (self.partType == 0):
+            MASS = 8.9e9
+        elif ('100-3' == self.sim_name) & (self.partType == 1):
+            MASS = 4.8e8
+        elif ('100-3-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 5.7e8
+        elif ('300-1' == self.sim_name) & (self.partType == 0):
+            MASS = 1.1e7
+        elif ('300-1' == self.sim_name) & (self.partType == 1):
+            MASS = 5.9e7
+        elif ('300-1-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 7e7
+        elif ('300-2' == self.sim_name) & (self.partType == 0):
+            MASS = 8.8e7
+        elif ('300-2' == self.sim_name) & (self.partType == 1):
+            MASS = 4.7e8
+        elif ('300-2-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 5.6e8
+        elif ('300-3' == self.sim_name) & (self.partType == 0):
+            MASS = 3.8e8
+        elif ('300-3' == self.sim_name) & (self.partType == 1):
+            MASS = 7e8
+        elif ('300-3-Dark' == self.sim_name) & (self.partType == 1):
+            MASS = 4.5e9
+           
+        
+        self.density_ar = np.array([])
+        
+        bin1 = 10**(np.arange(np.log10(0.001),np.log10(3 + 0.1), 0.1))
+                    
+        for i in bin1:
+            npart = len(self.r[(self.r>i) & (self.r<(i+0.1))])
+            density = np.log10((npart * MASS) / ((4./3.)*np.pi*((i+0.1)**3 - i**3)))
+            self.density_ar = np.append(self.density_ar, density)
+            
+        
+        #print('HALO ID IS ', halo_id)
+        np.savetxt("{}_multiples_halos/id={}_part={}.dat".format(self.sim_name,halo_id,self.partType), np.transpose([bin1,self.density_ar]), header = "r[Mpc/h], log10rho")
+   
+    def density_star_profile_calc(self):
+        
+        # The function calculates a density profile for Stars
+
+        self.density_ar = np.array([])
+        
+        data = snap.loadHalo(self.basePath, 99, id=self.id, partType=self.partType, fields=['Coordinates', 'Masses'])
+        mass = data['Masses'] * 1e+10
+        coord = data['Coordinates']
+        mass_sum = np.sum(mass)
+        
+        bin1 = 10**(np.arange(np.log10(0.001),np.log10(3 + 0.1), 0.1))
+
+        for i in bin1:
+            density = np.log10((mass_sum) / ((4/3)*np.pi*((i+0.1)**3 - i**3))) 
+            self.density_ar = np.append(self.density_ar, density)
+    
+        np.savetxt("{}_multiples_halos/id={}_part={}.dat".format(self.sim_name,halo_id,self.partType), np.transpose([bin1,self.density_ar]), header = "r[Mpc/h], log10rho")
+        
+    def density_profile_graph(self):
+        
+        # Graphs the density profile 
+        
+        fig = plt.figure(0,figsize=(15,8))
+        ax = fig.add_subplot(111)
+        
+        plt.figure(figsize=(21,7))
+        plt.subplot(131)
+        plt.xlabel('x axis', fontsize=15)
+        plt.ylabel('y axis', fontsize=15)
+        plt.title('', fontsize=15)
+        plt.scatter(self.x[(self.r>0.3) & (self.r<0.4)],self.y[(self.r<0.4) & (self.r>0.3)], c = 'rebeccapurple', s = 0.1, alpha = 0.3) # alpha = transparency, s = size
+        plt.subplot(132)
+        plt.xlabel('y axis', fontsize=15)
+        plt.ylabel('z axis', fontsize=15)
+        plt.title('TNG{}'.format(sim_name), fontsize=15)
+        plt.scatter(self.y[(self.r>0.3) & (self.r<0.4)],self.z[(self.r>0.3) & (self.r<0.4)], c = 'rebeccapurple', s = 0.1, alpha = 0.3)
+        plt.subplot(133)
+        plt.xlabel('z axis', fontsize=15)
+        plt.ylabel('x axis', fontsize=15)
+        plt.title('', fontsize=15)
+        plt.scatter(self.z[(self.r>0.3) & (self.r<0.4)],self.x[(self.r>0.3) & (self.r<0.4)], c = 'rebeccapurple', s = 0.1, alpha = 0.3)
+
+        ax.set_xlabel('Distance from Center of Subhalo in Megaparsec [log10]')
+        ax.set_ylabel('Density of {} (Number of Particles)/(Volume in Megaparsec)^3 [log10]'.format(self.sim_name))
+        ax.set_xscale('log')       
+        plt.title('Density Profile for TNG{} Partilcle Type: {}'.format(self.sim_name,self.partType), fontsize=15)
+        ax.plot(self.density_ar, '-', label = "Halo ID:{}".format(str(halo_id)))
+        ax.legend()
+        
+        
+        sim_name = MeasureDensityProfile('100-3',0) 
+# The last number puts in the partType
+"""
+partType 0 = Gas
+         1 = DM
+         4 = Stars
+         
+"""
+
+for halo_id in np.arange(0,179,1):
+    sim_name.select_subhalo1(halo_id = halo_id)
+    sim_name.select_particle_type()
+#    sim_name.mass_sim_partType()
+#    sim_name.graph_scatter_plot()
+    sim_name.density_star_profile_calc()
+#    sim_name.density_profile_calc()
+#    sim_name.density_profile_graph()
+#    plt.figure()
+#     sim_name.plotFOF()
+
+for halo_id in np.arange(0,179,1):
+    bins, density_1 = np.loadtxt("300-1_multiples_halos/id={}_part={}.dat".format(halo_id,0), unpack=True)
+    bins, density_2 = np.loadtxt("300-1_multiples_halos/id={}_part={}.dat".format(halo_id,1), unpack=True)
+    bins, density_3 = np.loadtxt("300-1_multiples_halos/id={}_part={}.dat".format(halo_id,4), unpack=True)
+
+    density_1 = 10**density_1 
+    density_2 = 10**density_2
+    density_3 = 10**density_3
+
+
+
+    density = density_1 + density_2 + density_3
+    
+    np.savetxt("300-1_added/id={}_tot.dat".format(halo_id), np.transpose([bins,density]), header = "r[Mpc/h], log10rho")
+    
+    fig = plt.figure(0,figsize=(15,8))
+ax = fig.add_subplot(111)
+
+ax.set_xscale('log') 
+ax.set_yscale('log')
+ax.set_xlabel('Distance of Subhalo in Megaparsec [log10]')
+ax.set_ylabel('Density of Subhalo (Number of Particles)/(Volume in Megaparsec)^3 [log10]')
+ax.set_title('Density Profile for Subhalos Greater Than 10^14 in 300-1')
+#ax.set_xlim(0.01, 2)
+
+
+for halo_id in np.arange(0,187,1):
+    bins, density = np.loadtxt("300-1-Dark_added/id={}_tot.dat".format(halo_id), unpack=True)
+    ax.plot(bins, density_2, '-', label = "{}".format(halo_id))
