@@ -6,25 +6,45 @@ import csv
 simp = pd.read_csv("simpsons_episodes.csv")
 season = simp.season.astype("float")
 rating = simp.imdb_rating
+views = simp.us_viewers_in_millions 
+season_list = list(range(1,35)) # Just an array for visualiztion purposes that lists seasons
 
 season_rating = pd.DataFrame({'season' : season, 'rating' : rating}) # Create two columns, one with season number, other with rating per episode
 
-list_means = []
+season_views = pd.DataFrame({'season' : season, 'views' : views}) # Create two columns, one with season number, other with viewership per episode
 
-for i in range(1,35):
-    rslt_df = season_rating.loc[season_rating['season'] == i]  # Isolate episode ratings per season
-    mean = rslt_df['rating'].mean()
-    list_means.append(mean)
+def rating_mean_per_season():
+    list_means = []
+
+    for i in range(1,35):
+        rslt_df = season_rating.loc[season_rating['season'] == i]  # Isolate episode ratings per season
+        mean = rslt_df['rating'].mean()                            # calculate mean of rating for inputted season 
+        list_means.append(mean)                                    # record mean value and place in array
     
-print(len(list_means))
+    #Visualize
+    fig , ax = plt.subplots()       
+    ax.plot(season_list, list_means)
+    ax.set_ylim(6, 8.5)
+    ax.set_xlim(0, 35)
+    plt.xlabel("Season Number")
+    plt.ylabel("IMDB Rating")
+    plt.title("Simpsons Average IMDB Score Per Season")
+    plt.show()
 
-season_list = list(range(1,35))
+def viwership_mean_per_season():    
+    list_means2 = []
 
-fig , ax = plt.subplots()
-ax.plot(season_list, list_means)
-ax.set_ylim(6, 8.5)
-ax.set_xlim(0, 35)
-plt.xlabel("Season Number")
-plt.ylabel("IMDB Rating")
-plt.title("Simpsons Average IMDB Score Per Season")
-plt.show()
+    for i in range(1,35):
+        rslt_df = season_views.loc[season_views['season'] == i]  # Isolate episode viewership per season
+        mean = rslt_df['views'].mean()                           #calculate mean of viewship for inputted season 
+        list_means2.append(mean)                                 # record mean value and place in array 
+
+    #Viewership
+    fig , ax = plt.subplots()
+    ax.plot(season_list, list_means2)
+    ax.set_ylim(0, 30)
+    ax.set_xlim(0, 35)
+    plt.xlabel("Season Number")
+    plt.ylabel("Viewership Averge in Millions")
+    plt.title("Simpsons Average Viewership Per Season")
+    plt.show()
